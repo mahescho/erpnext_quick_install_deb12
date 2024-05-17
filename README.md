@@ -8,22 +8,38 @@ To use this script, follow these steps:
 
 # Before Installation
 
-Make sure you install the latest package versions by updating system packages if you are running this script on a fresh Ubuntu machine.
+Make sure you install the latest package versions by updating system packages if you are running this script on a fresh Debian machine. Login as Root and do:
 
 ```
-sudo apt update && sudo apt -y upgrade
+apt update && sudo apt -y full-upgrade
 ```
 and then reboot your machine 
+
+Cereate a user, e.g: frappe and grannt sudo permittions to this user:
+
+```
+apt install sudo -y
+addiser frappe
+usermod -aG sudo frappe
+```
+
+Login as the new user or su to the new user:
+
+```
+su - frappe
+```
+
+and start the installation.
 
 # Installation:
 
 1. Clone the Repo:
 ```
-git clone https://github.com/flexcomng/erpnext_quick_install.git
+git clone https://github.com/mahescho/erpnext_quick_install_deb12.git
 ```
 2. navigate to the folder:
 ```
-cd erpnext_quick_install
+cd erpnext_quick_install_deb12
 ```
 3. Make the script executable
 ```
@@ -31,19 +47,14 @@ sudo chmod +x erpnext_install.sh
 ```
 4. Run the script:
 ```
-source erpnext_install.sh
+./erpnext_install.sh
 ```
 # Compatibility
 
-Ubuntu 22.04 LTS,
-Ubuntu 20.04 LTS
-
-Debian 10 (Buster),
-Debian 11 (Bulls Eye)
+Debian 12
 
 # NOTE:
 
-Version 15 Compatibility is set to Ubuntu 22.04 LTS and above only. Other Distros or lower Ubuntu versions not supported for version 15 installation.
 Visit https://github.com/gavindsouza/awesome-frappe to learn about other apps you can install.
 
 If you encounter spawn error on socketio when running bench restart, run the following commands:

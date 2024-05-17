@@ -22,8 +22,8 @@ LIGHT_BLUE='\033[1;34m'
 NC='\033[0m' # No Color
 
 # Checking Supported OS and distribution
-SUPPORTED_DISTRIBUTIONS=("Ubuntu" "Debian")
-SUPPORTED_VERSIONS=("22.04" "20.04" "11" "10" "9" "8")
+SUPPORTED_DISTRIBUTIONS=("Debian")
+SUPPORTED_VERSIONS=("12")
 
 check_os() {
     local os_name=$(lsb_release -is)
@@ -124,6 +124,10 @@ select version_choice in "${versions[@]}"; do
     esac
 done
 
+#
+# ask for parameters
+#
+
 # Confirm the version choice with the user
 echo -e "${GREEN}You have selected $version_choice for installation.${NC}"
 echo -e "${LIGHT_BLUE}Do you wish to continue? (yes/no)${NC}"
@@ -144,102 +148,56 @@ else
     echo -e "${GREEN}Proceeding with the installation of $version_choice.${NC}"
 
 fi
-sleep 2
+sleep 1
 
-# Check OS compatibility for Version 15
-if [[ "$bench_version" == "version-15" ]]; then
-    if [[ "$(lsb_release -si)" != "Ubuntu" ]]; then
-        echo -e "${RED}Your Distro is not supported for Version 15.${NC}"
-        exit 1
-    elif [[ "$(lsb_release -rs)" < "22.04" ]]; then
-        echo -e "${RED}Your Ubuntu version is below the minimum version required to support Version 15.${NC}"
-        exit 1
-    fi
+# Prompt user for site name
+read -p "Enter the site name (If you wish to install SSL later, please enter a FQDN, default: $(hostname -f)): " sn
+if [ -z "$sn" ]; then
+    site_name=$(hostname -f)
+else
+    site_name=$sn
 fi
+sleep 1
+adminpasswrd=$(ask_twice "Enter the ERPnext Administrator password you want to" "true")
+echo -e "\n"
+
+echo -e "${LIGHT_BLUE}Would you like to do a production install? (yes/no)${NC}"
+read -p "Response: " continue_prod
+continue_prod=$(echo "$continue_prod" | tr '[:upper:]' '[:lower:]')
+
+#Next let's set some important parameters.
+#We will need your required SQL root passwords
+echo -e "We will need your required SQL root password"
+sleep 1
+sqlpasswrd=$(ask_twice "What is your required SQL root password" "true")
+sleep 1
+echo -e "\n"
+
+#
+# Run the installation
+#
 
 # Check OS and version compatibility for all versions
 check_os
 #First Let's take you home
 cd $(sudo -u $USER echo $HOME)
 
-#Next let's set some important parameters.
-#We will need your required SQL root passwords
-echo -e "${YELLOW}Now let's set some important parameters...${NC}"
-sleep 1
-echo -e "${YELLOW}We will need your required SQL root password${NC}"
-sleep 1
-sqlpasswrd=$(ask_twice "What is your required SQL root password" "true")
-sleep 1
-echo -e "\n"
-check_os
-
-
 #Now let's make sure your instance has the most updated packages
 echo -e "${YELLOW}Updating system packages...${NC}"
 sleep 2
 sudo apt update
-sudo apt upgrade -y
+sudo apt full-upgrade -y
 echo -e "${GREEN}System packages updated.${NC}"
 sleep 2
 
 #Now let's install a couple of requirements: git, curl and pip
 echo -e "${YELLOW}Installing preliminary package requirements${NC}"
 sleep 3
-sudo apt install software-properties-common git curl -y
 
-#Next we'll install the python environment manager...
-echo -e "${YELLOW}Installing python environment manager and other requirements...${NC}"
-sleep 2
-
-# Install Python 3.10 if not already installed or version is less than 3.10
-py_version=$(python3 --version 2>&1 | awk '{print $2}')
-py_major=$(echo "$py_version" | cut -d '.' -f 1)
-py_minor=$(echo "$py_version" | cut -d '.' -f 2)
-
-if [ -z "$py_version" ] || [ "$py_major" -lt 3 ] || [ "$py_major" -eq 3 -a "$py_minor" -lt 10 ]; then
-    echo -e "${LIGHT_BLUE}It appears this instance does not meet the minimum Python version required for ERPNext 14 (Python3.10)...${NC}"
-    sleep 2 
-    echo -e "${YELLOW}Not to worry, we will sort it out for you${NC}"
-    sleep 4
-    echo -e "${YELLOW}Installing Python 3.10+...${NC}"
-    sleep 2
-
-    sudo apt -qq install build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev wget libbz2-dev -y && \
-    wget https://www.python.org/ftp/python/3.10.11/Python-3.10.11.tgz && \
-    tar -xf Python-3.10.11.tgz && \
-    cd Python-3.10.11 && \
-    ./configure --prefix=/usr/local --enable-optimizations --enable-shared LDFLAGS="-Wl,-rpath /usr/local/lib" && \
-    make -j $(nproc) && \
-    sudo make altinstall && \
-    cd .. && \
-    sudo rm -rf Python-3.10.11 && \
-    sudo rm Python-3.10.11.tgz && \
-    pip3.10 install --user --upgrade pip && \
-    echo -e "${GREEN}Python3.10 installation successful!${NC}"
-    sleep 2
-fi
-echo -e "\n"
-echo -e "${YELLOW}Installing additional Python packages and Redis Server${NC}"
-sleep 2
-sudo apt install git python3-dev python3-setuptools python3-venv python3-pip python3-distutils redis-server -y && \
-wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb && \
-sudo dpkg -i wkhtmltox_0.12.6.1-2.jammy_amd64.deb && \
-sudo cp /usr/local/bin/wkhtmlto* /usr/bin/ && \
-sudo chmod a+x /usr/bin/wk*
-sudo rm wk* && \
-sudo apt --fix-broken install -y && \
-sudo apt install fontconfig xvfb libfontconfig xfonts-base xfonts-75dpi libxrender1 -y && \
-
-echo -e "${GREEN}Done!${NC}"
-sleep 1
-echo -e "\n"
-#... And mariadb with some extra needed applications.
-echo -e "${YELLOW}Now installing MariaDB and other necessary packages...${NC}"
-sleep 2
-sudo apt install mariadb-server mariadb-client -y
-echo -e "${GREEN}MariaDB and other packages have been installed successfully.${NC}"
-sleep 2
-
+sudo apt install sudo curl git python3-dev python3-setuptools python3-pip python3-distutils \
+ python3-venv software-properties-common mariadb-server mariadb-client redis-server xvfb \
+ libfontconfig wkhtmltopdf default-libmysqlclient-dev npm supervisor \
+ fontconfig xvfb libfontconfig xfonts-base xfonts-75dpi libxrender1 -y
 
 # Use a hidden marker file to determine if this section of the script has run before.
 MARKER_FILE=~/.mysql_configured.marker
@@ -300,21 +258,15 @@ else
     node_version="16"
 fi
 
-sudo apt-get -qq install npm -y
 sudo npm install -g yarn
 echo -e "${GREEN}Package installation complete!${NC}"
 sleep 2
 
-# Now let's reactivate virtual environment
-if [ -z "$py_version" ] || [ "$py_major" -lt 3 ] || [ "$py_major" -eq 3 -a "$py_minor" -lt 10 ]; then
-    python3.10 -m venv $USER && \
-    source $USER/bin/activate
-    nvm use $node_version
-fi
 
 #Install bench
 echo -e "${YELLOW}Now let's install bench${NC}"
 sleep 2
+sudo rm -rf /usr/lib/python3.11/EXTERNALLY-MANAGED
 sudo pip3 install frappe-bench
 
 #Initiate bench in frappe-bench folder, but get a supervisor can't restart bench error...
@@ -324,13 +276,6 @@ bench init frappe-bench --version $bench_version --verbose --install-app erpnext
 echo -e "${GREEN}Bench installation complete!${NC}"
 sleep 1
 
-# Prompt user for site name
-echo -e "${YELLOW}Preparing for Production installation. This could take a minute... or two so please be patient.${NC}"
-read -p "Enter the site name (If you wish to install SSL later, please enter a FQDN): " site_name
-sleep 1
-adminpasswrd=$(ask_twice "Enter the Administrator password" "true")
-echo -e "\n"
-sleep 2
 echo -e "${YELLOW}Now setting up your site. This might take a few minutes. Please wait...${NC}"
 sleep 1
 # Change directory to frappe-bench
@@ -340,9 +285,6 @@ sudo chmod -R o+rx /home/$(echo $USER)
 
 bench new-site $site_name --db-root-password $sqlpasswrd --admin-password $adminpasswrd --install-app erpnext
 
-echo -e "${LIGHT_BLUE}Would you like to continue with production install? (yes/no)${NC}"
-read -p "Response: " continue_prod
-continue_prod=$(echo "$continue_prod" | tr '[:upper:]' '[:lower:]')
 case "$continue_prod" in
     "yes" | "y")
 
@@ -400,56 +342,6 @@ case "$continue_prod" in
     printf "${NC}\n"
     sleep 3
 
-    echo -e "${YELLOW}Would you like to install SSL? (yes/no)${NC}"
-
-    read -p "Response: " continue_ssl
-
-    continue_ssl=$(echo "$continue_ssl" | tr '[:upper:]' '[:lower:]')
-
-    case "$continue_ssl" in
-        "yes" | "y")
-            echo -e "${YELLOW}Make sure your domain name is pointed to the IP of this instance and is reachable before your proceed.${NC}"
-            sleep 3
-            # Prompt user for email
-            read -p "Enter your email address: " email_address
-
-            # Install Certbot
-            echo -e "${YELLOW}Installing Certbot...${NC}"
-            sleep 1
-            if [ "$DISTRO" == "Debian" ]; then
-                echo -e "${YELLOW}Fixing openssl package on Debian...${NC}"
-                sleep 4
-                sudo pip3 uninstall cryptography -y
-                yes | sudo pip3 install pyopenssl==22.0.0 cryptography==36.0.0
-                echo -e "${GREEN}Package fixed${NC}"
-                sleep 2
-            fi
-            # Install Certbot Clasic
-            # sudo apt install certbot python3-certbot-nginx -y
-            sudo apt install snapd -y && \
-            sudo snap install core && \
-            sudo snap refresh core && \
-            sudo snap install --classic certbot && \
-            sudo ln -s /snap/bin/certbot /usr/bin/certbot
-            
-            # Obtain and Install the certificate
-            echo -e "${YELLOW}Obtaining and installing SSL certificate...${NC}"
-            sleep 2
-            sudo certbot --nginx --non-interactive --agree-tos --email $email_address -d $site_name
-            echo -e "${GREEN}SSL certificate installed successfully.${NC}"
-            sleep 2
-            ;;
-        *)
-            echo -e "${RED}Skipping SSL installation...${NC}"
-            sleep 3
-            ;;
-    esac
-
-    # Now let's reactivate virtual environment
-    if [ -z "$py_version" ] || [ "$py_major" -lt 3 ] || [ "$py_major" -eq 3 -a "$py_minor" -lt 10 ]; then
-        deactivate
-    fi
-
     echo -e "${GREEN}--------------------------------------------------------------------------------"
     echo -e "Congratulations! You have successfully installed ERPNext $version_choice."
     echo -e "You can start using your new ERPNext installation by visiting https://$site_name"
@@ -469,7 +361,6 @@ case "$continue_prod" in
     else
         nvm alias default 16
     fi
-    nvm alias default 16
     bench use $site_name
     bench build
     echo -e "${GREEN}Done!"
